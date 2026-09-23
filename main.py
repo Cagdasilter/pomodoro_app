@@ -1,5 +1,7 @@
 import math
 from tkinter import *
+from tkinter.ttk import Notebook
+
 # ---------------------------- CONSTANTS ------------------------------- #
 PINK = "#e2979c"
 RED = "#e7305b"
@@ -13,12 +15,15 @@ CHECKMARK = "✔"
 reps = 0
 timer = None
 
+#for quick testing and debugging
+TIMER_MULTIPLIER = 60
+
 # ---------------------------- TIMER RESET ------------------------------- # 
 def reset_timer():
     global reps
     reps = 0
     window.after_cancel(timer)
-    canvas.itemconfig(timer_text, text="00:00")
+    tomato_canvas.itemconfig(timer_text, text="00:00")
     title_label.config(text="Ready to Start?")
     checkmark_label.config(text="")
 
@@ -31,10 +36,15 @@ def start_timer():
     window.attributes('-topmost', 1)
     window.attributes('-topmost', 0)
 
-    work_sec = WORK_MIN * 60
-    short_break_sec = SHORT_BREAK_MIN * 60
-    long_break_sec = LONG_BREAK_MIN * 60
+    work_sec = WORK_MIN * TIMER_MULTIPLIER
+    short_break_sec = SHORT_BREAK_MIN * TIMER_MULTIPLIER
+    long_break_sec = LONG_BREAK_MIN * TIMER_MULTIPLIER
 
+    #adds plant to forest when you do 1 rep
+    if reps == 2:
+        forest_canvas.grid(row=1, column=1)
+
+    #rest of the timer
     if reps % 8 == 0:
         count_down(long_break_sec)
         title_label.config(text="Long Break", fg=RED)
@@ -60,7 +70,7 @@ def count_down(count):
         count_min = f"0{count_min}"
 
 
-    canvas.itemconfig(timer_text, text=f"{count_min}:{count_sec}")
+    tomato_canvas.itemconfig(timer_text, text=f"{count_min}:{count_sec}")
     if count > 0:
         global timer
         timer = window.after(1000, count_down, count - 1)
@@ -79,29 +89,45 @@ window = Tk()
 window.title("My own pomodoro productivity app")
 window.config(padx=100, pady=50, bg=YELLOW)
 
+#notebook widget for forest and the pomodoro
+notebook = Notebook(window)
+notebook.grid(row=0, column=0)
+
+#forest and pomodoro tabs
+pomodoro_frame = Frame(notebook, bg=YELLOW)
+forest_frame = Frame(notebook, bg=YELLOW)
+
+notebook.add(pomodoro_frame, text="Pomodoro")
+notebook.add(forest_frame, text="Forest")
+
+#tomato plant canvas
+forest_canvas = Canvas(forest_frame, width=200, height=224, bg=YELLOW, highlightthickness=0)
+forest_img = PhotoImage(file="tomato_plant.png")
+forest_canvas.create_image(100, 100, image=forest_img)
+
 #timer label
-title_label = Label(window, text="Ready to Start?", font=(FONT_NAME, 35, "bold"), fg=GREEN, bg=YELLOW)
+title_label = Label(pomodoro_frame, text="Ready to Start?", font=(FONT_NAME, 35, "bold"), fg=GREEN, bg=YELLOW)
 title_label.grid(row=0, column=1)
 
 #picture of tomato
-canvas = Canvas(window, width=200, height=224, bg=YELLOW, highlightthickness=0)
+tomato_canvas = Canvas(pomodoro_frame, width=200, height=224, bg=YELLOW, highlightthickness=0)
 tomato_img = PhotoImage(file="tomato.png")
-canvas.create_image(100, 112, image=tomato_img)
+tomato_canvas.create_image(100, 112, image=tomato_img)
 
 #countdown timer
-timer_text = canvas.create_text(100, 130, text="00:00", fill="white", font=(FONT_NAME, 35, "bold"))
-canvas.grid(row=1, column=1)
+timer_text = tomato_canvas.create_text(100, 130, text="00:00", fill="white", font=(FONT_NAME, 35, "bold"))
+tomato_canvas.grid(row=1, column=1)
 
 #start button
-start_button = Button(text="Start", command=start_timer)
+start_button = Button(pomodoro_frame,text="Start", command=start_timer)
 start_button.grid(row=3, column=0)
 
 #reset button
-start_button = Button(text="Reset", command=reset_timer)
+start_button = Button(pomodoro_frame,text="Reset", command=reset_timer)
 start_button.grid(row=3, column=2)
 
 #checkmarks
-checkmark_label = Label(window, text="", font=(FONT_NAME, 15, "bold"), fg=GREEN, bg=YELLOW)
+checkmark_label = Label(pomodoro_frame, text="", font=(FONT_NAME, 15, "bold"), fg=GREEN, bg=YELLOW)
 checkmark_label.grid(row=4, column=1)
 
 
