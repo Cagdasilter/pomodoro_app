@@ -1,134 +1,441 @@
-import math
-from tkinter import *
+import os
+import tkinter as tk
 from tkinter.ttk import Notebook
 
-# ---------------------------- CONSTANTS ------------------------------- #
+
+# ---------------------------- SETTINGS ---------------------------- #
+
+WORK_MIN = 25
+SHORT_BREAK_MIN = 5
+LONG_BREAK_MIN = 25
+
+# Use True to test quickly.
+# Use False for normal 25/5/25 minute Pomodoro times.
+TEST_MODE = True
+
+TEST_WORK_SECONDS = 10
+TEST_SHORT_BREAK_SECONDS = 3
+TEST_LONG_BREAK_SECONDS = 5
+
+TOMATO_FILE = "tomato.png"
+
+PLANT_FILES = [
+    "tomato_stage_1.png",
+    "tomato_stage_2.png",
+    "tomato_stage_3.png",
+    "tomato_stage_4.png",
+    "tomato_stage_5.png",
+    "tomato_stage_6.png",
+]
+
 PINK = "#e2979c"
 RED = "#e7305b"
 GREEN = "#9bdeac"
 YELLOW = "#f7f5dd"
-FONT_NAME = "Calluna"
-WORK_MIN = 25
-SHORT_BREAK_MIN = 5
-LONG_BREAK_MIN = 20
-CHECKMARK = "✔"
-reps = 0
+FONT_NAME = "Arial"
+
+
+# ---------------------------- TIMER STATE ---------------------------- #
+
 timer = None
-
-#for quick testing and debugging
-TIMER_MULTIPLIER = 60
-
-# ---------------------------- TIMER RESET ------------------------------- # 
-def reset_timer():
-    global reps
-    reps = 0
-    window.after_cancel(timer)
-    tomato_canvas.itemconfig(timer_text, text="00:00")
-    title_label.config(text="Ready to Start?")
-    checkmark_label.config(text="")
+current_mode = None
+work_sessions_completed = 0
+plant_stage = 1
+block_started = False
 
 
-# ---------------------------- TIMER MECHANISM ------------------------------- #
+def get_duration(minutes, test_seconds):
+    if TEST_MODE:
+        return test_seconds
+
+    return minutes * 60
+
+
+# ---------------------------- PLANT ---------------------------- #
+
+def update_plant():
+    forest_canvas.itemconfig(
+        plant_image_item,
+        image=plant_images[plant_stage - 1]
+    )
+
+    forest_progress_label.config(
+        text=f"Work sessions completed: {work_sessions_completed}/5"
+    )
+
+
+# ---------------------------- TIMER ---------------------------- #
+
 def start_timer():
-    global reps
-    reps += 1
+    global block_started
+    global work_sessions_completed
+    global plant_stage
 
-    window.attributes('-topmost', 1)
-    window.attributes('-topmost', 0)
+    if timer is not None:
+        return
 
-    work_sec = WORK_MIN * TIMER_MULTIPLIER
-    short_break_sec = SHORT_BREAK_MIN * TIMER_MULTIPLIER
-    long_break_sec = LONG_BREAK_MIN * TIMER_MULTIPLIER
+    if not block_started:
+        block_started = True
+        work_sessions_completed = 0
+        plant_stage = 1
+        update_plant()
 
-    #adds plant to forest when you do 1 rep
-    if reps == 2:
-        forest_canvas.grid(row=1, column=1)
+    start_button.config(state=tk.DISABLED)
+    start_work_session()
 
-    #rest of the timer
-    if reps % 8 == 0:
-        count_down(long_break_sec)
-        title_label.config(text="Long Break", fg=RED)
 
-    elif reps % 2 == 0:
-        count_down(short_break_sec)
-        title_label.config(text="Short Break", fg=PINK)
+def start_work_session():
+    global current_mode
 
+    current_mode = "work"
+    title_label.config(text="Work", fg=GREEN)
+
+    count_down(
+        get_duration(WORK_MIN, TEST_WORK_SECONDS)
+    )
+
+
+def start_short_break():
+    global current_mode
+
+    current_mode = "short_break"
+    title_label.config(text="Short Break", fg=PINK)
+
+    count_down(
+        get_duration(SHORT_BREAK_MIN, TEST_SHORT_BREAK_SECONDS)
+    )
+
+
+def start_long_break():
+    global current_mode
+
+    current_mode = "long_break"
+    title_label.config(text="Long Break", fg=RED)
+
+    count_down(
+        get_duration(LONG_BREAK_MIN, TEST_LONG_BREAK_SECONDS)
+    )
+
+
+def count_down(seconds_left):
+    global timer
+
+    minutes, seconds = divmod(seconds_left, 60)
+
+    tomato_canvas.itemconfig(
+        timer_text_item,
+        text=f"{minutes:02d}:{seconds:02d}"
+    )
+
+    if seconds_left > 0:
+        timer = window.after(
+            1000,
+            count_down,
+            seconds_left - 1
+        )
     else:
-        count_down(work_sec)
-        title_label.config(text="Work", fg=GREEN)
+        timer = None
+        finish_timer()
 
 
-# ---------------------------- COUNTDOWN MECHANISM ------------------------------- # 
-def count_down(count):
+def finish_timer():
+    global work_sessions_completed
+    global plant_stage
+    global current_mode
+    global block_started
 
-    count_min = math.floor(count / 60)
-    count_sec = math.floor(count % 60)
-    if count_sec < 10:
-        count_sec = f"0{count_sec}"
+    if current_mode == "work":
+        # Upgrade the plant after a completed work session.
+        work_sessions_completed += 1
+        plant_stage = work_sessions_completed + 1
 
-    if count_min < 10:
-        count_min = f"0{count_min}"
+        update_plant()
+
+        checkmark_label.config(
+            text="✔" * work_sessions_completed
+        )
+
+        if work_sessions_completed < 5:
+            start_short_break()
+        else:
+            start_long_break()
+
+    elif current_mode == "short_break":
+        # The plant stays unchanged during short breaks.
+        start_work_session()
+
+    elif current_mode == "long_break":
+        current_mode = None
+        block_started = False
+
+        title_label.config(
+            text="Block Complete!",
+            fg=GREEN
+        )
+
+        tomato_canvas.itemconfig(
+            timer_text_item,
+            text="00:00"
+        )
+
+        start_button.config(
+            state=tk.NORMAL
+        )
 
 
-    tomato_canvas.itemconfig(timer_text, text=f"{count_min}:{count_sec}")
-    if count > 0:
-        global timer
-        timer = window.after(1000, count_down, count - 1)
+def reset_timer():
+    global timer
+    global current_mode
+    global work_sessions_completed
+    global plant_stage
+    global block_started
 
-    else:
-        start_timer()
-        marks = ""
-        work_sessions = math.floor(reps/2)
-        for _ in range(work_sessions):
-            marks += CHECKMARK
-        checkmark_label.config(text=marks)
+    if timer is not None:
+        window.after_cancel(timer)
+        timer = None
 
-# ---------------------------- UI SETUP ------------------------------- #
+    current_mode = None
+    work_sessions_completed = 0
+    plant_stage = 1
+    block_started = False
 
-window = Tk()
-window.title("My own pomodoro productivity app")
-window.config(padx=100, pady=50, bg=YELLOW)
+    title_label.config(
+        text="Ready to Start?",
+        fg=GREEN
+    )
 
-#notebook widget for forest and the pomodoro
+    tomato_canvas.itemconfig(
+        timer_text_item,
+        text="00:00"
+    )
+
+    checkmark_label.config(text="")
+    start_button.config(state=tk.NORMAL)
+
+    update_plant()
+
+
+# ---------------------------- WINDOW ---------------------------- #
+
+window = tk.Tk()
+window.title("My Pomodoro Productivity App")
+window.config(
+    padx=40,
+    pady=30,
+    bg=YELLOW
+)
+
+image_folder = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
+tomato_img = tk.PhotoImage(
+    file=os.path.join(image_folder, TOMATO_FILE)
+)
+
+plant_images = [
+    tk.PhotoImage(
+        file=os.path.join(image_folder, filename)
+    )
+    for filename in PLANT_FILES
+]
+
+
+# ---------------------------- TABS ---------------------------- #
+
 notebook = Notebook(window)
 notebook.grid(row=0, column=0)
 
-#forest and pomodoro tabs
-pomodoro_frame = Frame(notebook, bg=YELLOW)
-forest_frame = Frame(notebook, bg=YELLOW)
+pomodoro_frame = tk.Frame(
+    notebook,
+    bg=YELLOW
+)
 
-notebook.add(pomodoro_frame, text="Pomodoro")
-notebook.add(forest_frame, text="Forest")
+forest_frame = tk.Frame(
+    notebook,
+    bg=YELLOW
+)
 
-#tomato plant canvas
-forest_canvas = Canvas(forest_frame, width=200, height=224, bg=YELLOW, highlightthickness=0)
-forest_img = PhotoImage(file="tomato_plant.png")
-forest_canvas.create_image(100, 100, image=forest_img)
+notebook.add(
+    pomodoro_frame,
+    text="Pomodoro"
+)
 
-#timer label
-title_label = Label(pomodoro_frame, text="Ready to Start?", font=(FONT_NAME, 35, "bold"), fg=GREEN, bg=YELLOW)
-title_label.grid(row=0, column=1)
+notebook.add(
+    forest_frame,
+    text="Forest"
+)
 
-#picture of tomato
-tomato_canvas = Canvas(pomodoro_frame, width=200, height=224, bg=YELLOW, highlightthickness=0)
-tomato_img = PhotoImage(file="tomato.png")
-tomato_canvas.create_image(100, 112, image=tomato_img)
 
-#countdown timer
-timer_text = tomato_canvas.create_text(100, 130, text="00:00", fill="white", font=(FONT_NAME, 35, "bold"))
-tomato_canvas.grid(row=1, column=1)
+# ---------------------------- POMODORO TAB ---------------------------- #
 
-#start button
-start_button = Button(pomodoro_frame,text="Start", command=start_timer)
-start_button.grid(row=3, column=0)
+title_label = tk.Label(
+    pomodoro_frame,
+    text="Ready to Start?",
+    font=(FONT_NAME, 35, "bold"),
+    fg=GREEN,
+    bg=YELLOW
+)
 
-#reset button
-start_button = Button(pomodoro_frame,text="Reset", command=reset_timer)
-start_button.grid(row=3, column=2)
+title_label.grid(
+    row=0,
+    column=1
+)
 
-#checkmarks
-checkmark_label = Label(pomodoro_frame, text="", font=(FONT_NAME, 15, "bold"), fg=GREEN, bg=YELLOW)
-checkmark_label.grid(row=4, column=1)
+
+# Your original tomato.png stays on the main screen.
+tomato_canvas = tk.Canvas(
+    pomodoro_frame,
+    width=250,
+    height=250,
+    bg=YELLOW,
+    highlightthickness=0
+)
+
+tomato_canvas.grid(
+    row=1,
+    column=1
+)
+
+tomato_canvas.create_image(
+    125,
+    125,
+    image=tomato_img
+)
+
+
+# Timer displayed on top of tomato.png.
+timer_text_item = tomato_canvas.create_text(
+    125,
+    140,
+    text="00:00",
+    fill="white",
+    font=(FONT_NAME, 35, "bold")
+)
+
+
+start_button = tk.Button(
+    pomodoro_frame,
+    text="Start",
+    width=10,
+    command=start_timer
+)
+
+start_button.grid(
+    row=3,
+    column=0,
+    pady=15
+)
+
+
+reset_button = tk.Button(
+    pomodoro_frame,
+    text="Reset",
+    width=10,
+    command=reset_timer
+)
+
+reset_button.grid(
+    row=3,
+    column=2,
+    pady=15
+)
+
+
+checkmark_label = tk.Label(
+    pomodoro_frame,
+    text="",
+    font=(FONT_NAME, 15, "bold"),
+    fg=GREEN,
+    bg=YELLOW
+)
+
+checkmark_label.grid(
+    row=4,
+    column=1
+)
+
+
+# ---------------------------- FOREST TAB ---------------------------- #
+
+forest_title_label = tk.Label(
+    forest_frame,
+    text="Tomato Forest",
+    font=(FONT_NAME, 35, "bold"),
+    fg=GREEN,
+    bg=YELLOW,
+
+)
+
+forest_title_label.grid(
+    row=0,
+    column=1,
+    pady=(0, 10)
+)
+
+forest_date_label = tk.Label(
+    forest_frame,
+    text="09/27/2026",
+    font=(FONT_NAME, 10, "bold"),
+    fg=GREEN,
+    bg=YELLOW,
+
+)
+
+forest_date_label.grid(
+    row=2,
+    column=0,
+)
+
+forest_motivation_label = tk.Label(
+    forest_frame,
+    text="Keep Going!",
+    font=(FONT_NAME, 10, "bold"),
+    fg=GREEN,
+    bg=YELLOW,
+
+)
+
+forest_motivation_label.grid(
+    row=2,
+    column=2,
+)
+
+
+forest_canvas = tk.Canvas(
+    forest_frame,
+    width=300,
+    height=300,
+    bg=YELLOW,
+    highlightthickness=0
+)
+
+forest_canvas.grid(
+    row=1,
+    column=1
+)
+
+
+plant_image_item = forest_canvas.create_image(
+    150,
+    150,
+    image=plant_images[0]
+)
+
+
+forest_progress_label = tk.Label(
+    forest_frame,
+    text="Work sessions completed: 0/5",
+    font=(FONT_NAME, 13),
+    fg="black",
+    bg=YELLOW
+)
+
+forest_progress_label.grid(
+    row=2,
+    column=1,
+    pady=(10, 0)
+)
 
 
 window.mainloop()
